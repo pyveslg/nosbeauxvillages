@@ -1,0 +1,3 @@
+require 'ots'
+Ots.load
+

@@ -35,6 +35,8 @@ gem 'font-awesome-sass'
 gem 'simple_form'
 
 gem 'geocoder'
+gem 'rest-client'
+gem 'turf-ruby'
 
 group :development, :test do  gem 'pry-byebug'
   gem 'pry-rails'

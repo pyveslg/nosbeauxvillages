@@ -8,7 +8,8 @@ require "geocoder"
 namespace :villages do
   desc "Scrap French villages with labels"
   task detours: [ :environment ] do
-
+  	starting = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+  	puts "connecting to website..."
     url = "https://www.plusbeauxdetours.com/plan-du-site/"
     html_file = open(url).read
     html_doc = Nokogiri::HTML(html_file)
@@ -16,6 +17,7 @@ namespace :villages do
     regex = /^Détour par (.*) (dans|en)(les|l’|la|le|\s)+(.*)$/i
     elements = html_doc.search('li.page-item-74.page_item_has_children .page_item a')
 
+    puts "gathering information..."
     all_villages = elements.map do |element|
       text = element.text.strip
       {
@@ -25,9 +27,10 @@ namespace :villages do
         label: "Les Plus Beaux Détours de France"
       }
     end
-
+    puts "🚀 #{all_villages.length} villages found"
+    puts "saving and exporting information..."
     csv_options = { col_sep: ',', force_quotes: true, quote_char: '"', encoding: "UTF-8" }
-    filepath    = 'plus_beaux_detours_de_france.csv'
+    filepath    = 'data/cities/plus_beaux_detours_de_france.csv'
 
     CSV.open(filepath, 'wb', csv_options) do |csv|
       csv.to_io.write "\uFEFF"
@@ -36,6 +39,10 @@ namespace :villages do
         csv << village.values
       end
     end
+
+    ending = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+    elapsed_time = ending - starting
+    puts "⏱ Job done in #{(elapsed_time/60).floor} minutes and #{(elapsed_time%60).floor} seconds."
   end
 
   task caractere: [:environment] do
@@ -61,7 +68,7 @@ namespace :villages do
     end
 
     csv_options = { col_sep: ',', force_quotes: true, quote_char: '"', encoding: "UTF-8" }
-    filepath    = 'petites_cites_de_caractere.csv'
+    filepath    = 'data/cities/petites_cites_de_caractere.csv'
 
     CSV.open(filepath, 'wb', csv_options) do |csv|
       csv.to_io.write "\uFEFF"
@@ -70,6 +77,69 @@ namespace :villages do
         csv << village.values
       end
     end
+  end
+
+  task test: [:environment] do
+  	starting = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+		puts "Collecting rough data..."
+
+		filepath = 'data/cities/petites_cites_de_caractere.csv'
+
+  	def open(filepath)
+			csv_options = { col_sep: ';', quote_char: '"', encoding: "UTF-8", headers: :first_row }
+			villages = []
+			CSV.foreach(filepath, csv_options) do |row|
+				villages << {
+				  locality: row[0],
+				  department: row[1],
+				  link: row[2],
+				  label: row[3]
+				}
+			end
+			villages
+  	end
+
+  	puts "start fetching information..."
+  	villages = open(filepath)
+  	villages_length = villages.length
+
+    capybara = Capybara::Session.new(:selenium_chrome_headless)
+   	all_villages = villages.map do |village|
+	    # Start scraping
+	    capybara.visit(village[:link])
+	    contact = capybara.all("#block-fieldblock-taxonomy-term-communes-default-field-blocks .field-items .field-item.even")[-1]
+	    infos = contact.all("strong")
+	    ot_link = contact.all("a").map{|link| link['href']}.select{|link| /www/.match?(link)}[0]
+	    ot_name = infos[0].text.strip if infos[0]
+	    mairie = infos[1].text.strip if infos[1]
+	    regex = /\((.*)\)/
+	    departement = regex.match(mairie)[-1] if mairie && regex.match?(mairie)
+	    h = {
+	    	locality: village[:locality],
+	    	departement: departement,
+	    	link: village[:link],
+	    	label: village[:label],
+	    	ot_name: ot_name,
+	    	ot_link: ot_link
+	    }
+	    puts "#{(villages.index(village).fdiv(villages_length)*100).round(1)} % completed"
+	    h
+	  end
+	  csv_options = { col_sep: ',', force_quotes: true, quote_char: '"', encoding: "UTF-8" }
+	  filepath    = 'data/cities/petites_cites_de_caractere_with_dpt.csv'
+
+	  CSV.open(filepath, 'wb', csv_options) do |csv|
+	    csv.to_io.write "\uFEFF"
+	    csv << ['Locality', 'Department', 'Link', 'Label', 'OT', 'OT_Web']
+	    all_villages.each do |village|
+	      csv << village.values
+	    end
+	  end
+
+	  ending = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+		elapsed_time = ending - starting
+		puts "⏱ Job done in #{(elapsed_time/60).floor} minutes and #{(elapsed_time%60).floor} seconds."
+
   end
 
 
@@ -88,7 +158,7 @@ namespace :villages do
     end
 
     csv_options = { col_sep: ',', force_quotes: true, quote_char: '"', encoding: "UTF-8" }
-    filepath    = 'grands_site_de_france.csv'
+    filepath    = 'data/cities/grands_site_de_france.csv'
 
     CSV.open(filepath, 'wb', csv_options) do |csv|
       csv.to_io.write "\uFEFF"
@@ -97,6 +167,73 @@ namespace :villages do
         csv << village.values
       end
     end
+  end
+
+  task geocode: [:environment] do
+  	starting = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+		puts "Collecting rough data..."
+
+		filepath = 'data/cities/petites_cites_de_caractere_with_dpt.csv'
+
+  	def open(filepath)
+			csv_options = { col_sep: ';', quote_char: '"', encoding: "UTF-8", headers: :first_row }
+			villages = []
+			CSV.foreach(filepath, csv_options) do |row|
+				villages << {
+				  locality: row[0],
+				  department: row[1],
+				  link: row[2],
+				  label: row[3]
+				}
+			end
+			villages
+  	end
+
+  	villages = open(filepath)
+  	villages_length = villages.length
+
+  	not_success_villages = []
+		puts "Starting Geocoding villages"
+  	all_villages = villages.map do |village|
+  	  result = Geocoder.search("#{village[:locality]} #{village[:department] if village[:department]} France").first
+  	  if result
+  	    address = result.data["address"]
+  	    village_type = ["city", "town", "village", "hamlet", "suburb"]
+  	    h = {
+  	      locality: village_type.map{|v| address[v]}.compact.first,
+  	      department: address["county"],
+  	      region: address["state"],
+  	      zipcode: address["postcode"],
+  	      latitude: result.data["lat"],
+  	      longitude: result.data["lon"],
+  	      link: village[:link],
+  	      label: village[:label],
+  	    }
+  	  end
+  	  not_success_villages << village if !h
+  		puts "#{(villages.index(village).fdiv(villages_length)*100).round(1)} % completed"
+  	  h
+  	end
+  	puts "🎉 #{all_villages.length - not_success_villages.length} villages are now perfectly geocoded !"
+  	puts "~~~~~~~~~~~~~~~~~~~~~~~~"
+  	puts "You should manually geocode these ones (#{not_success_villages.length}:"
+  	p not_success_villages
+
+  	# // SUCCESSFULLY GEOCODED
+  	csv_options = { col_sep: ';', force_quotes: true, quote_char: '"', encoding: "UTF-8" }
+  	filepath = 'data/cities/new_geocoded_villages.csv'
+
+  	CSV.open(filepath, 'wb', csv_options) do |csv|
+  	  csv.to_io.write "\uFEFF"
+  	  csv << ["Locality", "Department", "Region", "Zipcode", "Latitude", "Longitude", "Link", "Label"]
+  	  all_villages.compact.each do |village|
+  	    csv << village.values
+  	  end
+  	end
+
+  	ending = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+  	elapsed_time = ending - starting
+  	puts "⏱ Job done in #{(elapsed_time/60).floor} minutes and #{(elapsed_time%60).floor} seconds."
   end
 
 end
