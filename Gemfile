@@ -37,6 +37,7 @@ gem 'simple_form'
 gem 'geocoder'
 gem 'rest-client'
 gem 'turf-ruby'
+gem 'string-similarity'
 
 group :development, :test do  gem 'pry-byebug'
   gem 'pry-rails'

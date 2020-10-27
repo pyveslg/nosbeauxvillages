@@ -28,6 +28,10 @@ namespace :export do
 				caractere: labels.include?("Petite Cité de Caractère"),
 				station_classe: labels.include?("Station Classée"),
 				links: links.empty? ? "" : links,
+				ot_office: village.ot["office"],
+				ot_coordinates: village.ot["coordinates"],
+				ot_epci: village.ot["epci"],
+				ot_distance: village.ot["distance"]
 			}
 		end
 
@@ -36,10 +40,16 @@ namespace :export do
 
 		CSV.open(filepath, 'wb', csv_options) do |csv|
 		  csv.to_io.write "\uFEFF"
-		  csv << ["Id", "Locality", "Department", "Region", "Zipcode", "Cog", "Latitude", "Longitude", "Population", "#Labels", "Grand Site", "Grand Site (En cours)", "PBVF", "Détours", "Caractere", "Station Classée", "Links"]
+		  csv << ["Id", "Locality", "Department", "Region", "Zipcode", "Cog", "Latitude", "Longitude", "Population", "#Labels", "Grand Site", "Grand Site (En cours)", "PBVF", "Détours", "Caractere", "Station Classée", "Links", "OT Office", "OT Coordinates", "OT EPCI", "OT Distance" ]
 		  all_villages.compact.each do |village|
 		    csv << village.values
 		  end
+		end
+
+		villages = { villages: all_villages }
+		filepath = 'data/cities/save_all.json'
+		File.open(filepath, 'wb') do |file|
+		  file.write(JSON.generate(villages))
 		end
 	end
 
