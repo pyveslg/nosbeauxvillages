@@ -19,16 +19,17 @@ class Stations
     	gare.deep_symbolize { |key| key }
     end
     all_gares.map do |gare|
+      fields = gare[:fields]
     	{
-    		station_name: gare[:fields][:alias_libelle_noncontraint],
-    		localty: gare[:fields][:commune_libellemin],
-    		zipcode: gare[:fields][:adresse_cp],
-    		department: gare[:fields][:departement_libellemin],
-    		departement_numero: gare[:fields][:departement_numero],
+    		station_name: fields[:alias_libelle_noncontraint],
+    		localty: fields[:commune_libellemin],
+    		zipcode: fields[:adresse_cp],
+    		department: fields[:departement_libellemin],
+    		departement_numero: fields[:departement_numero],
     		latitude: gare[:geometry] ? gare[:geometry][:coordinates].last : "",
     		longitude: gare[:geometry] ? gare[:geometry][:coordinates].first : "",
-    		scnf_region: gare[:fields][:gare_regionsncf_libelle],
-    		cog: gare[:fields][:commune_code],
+    		scnf_region: fields[:gare_regionsncf_libelle],
+        cog: "#{fields[:departement_numero]}#{fields[:commune_code]}",
     	}
     end
   end

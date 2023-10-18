@@ -20,9 +20,9 @@ class Ots
     all_ots = ots[0][1].partition.with_index { |_, i| i.even? }[1]
     all_ots.map do |ot|
     	{
-    		poly: ot[:geometry][:coordinates],
     		name: ot[:properties][:name],
-    		region: ot[:properties][:region]
+    		region: ot[:properties][:region],
+    		poly: ot[:geometry][:coordinates]
     	}
     end
   end
